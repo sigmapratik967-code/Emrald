@@ -1,4 +1,4 @@
-name: Build Emrald Mobile APK
+name: Build VoidXen Mobile APK
 on:
   push:
   workflow_dispatch:
@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: unzip -q Emrald-Mobile-Launcher.zip -d project
+      - run: unzip -q VoidXen-Mobile-Launcher.zip -d project
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -19,9 +19,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
-      - run: gradle assembleDebug --no-daemon
+      - name: Build
         working-directory: project
+        run: |
+          TYPE=$(grep '^buildType=' launcher.properties | cut -d= -f2 | tr -d '\r ')
+          if [ "$TYPE" = "release" ]; then gradle assembleRelease --no-daemon; else gradle assembleDebug --no-daemon; fi
+      - name: Collect APK and DEX report
+        working-directory: project
+        run: |
+          NAME=$(grep '^apkName=' launcher.properties | cut -d= -f2 | tr -d '\r ')
+          mkdir -p out
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          cp "$APK" "out/${NAME}.apk"
+          echo "== DEX files inside APK =="
+          unzip -l "out/${NAME}.apk" | grep -E 'classes[0-9]*\.dex' || true
       - uses: actions/upload-artifact@v4
         with:
-          name: Emrald-Mobile-APK
-          path: project/app/build/outputs/apk/debug/*.apk
+          name: VoidXen-Mobile-APK
+          path: project/out/*.apk
