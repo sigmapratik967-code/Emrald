@@ -18,38 +18,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android SDK
+      - name: Extract Android Project
         run: |
-          set -e
-          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          mkdir extracted
+          unzip -q VoidXenMobileLauncher.zip -d extracted
+          echo "Extracted files:"
+          find extracted -maxdepth 3 -type f | head -100
 
-      - name: Find Android project
+      - name: Find Gradle Project
         id: project
-        shell: bash
         run: |
-          set -e
-          FILE=$(find . -type f \( -name settings.gradle -o -name settings.gradle.kts -o -name build.gradle -o -name build.gradle.kts \) \
-            -not -path "*/.gradle/*" \
-            -not -path "*/build/*" | head -n 1)
+          FILE=$(find extracted -type f \( \
+            -name settings.gradle \
+            -o -name settings.gradle.kts \
+          \) | head -1)
 
           if [ -z "$FILE" ]; then
-            echo "ERROR: No Gradle project found."
-            echo "Repository files:"
-            find . -maxdepth 4 -type f | head -200
+            echo "No settings.gradle found in ZIP"
             exit 1
           fi
 
-          DIR=$(dirname "$FILE")
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
-          echo "Found Gradle project in: $DIR"
+          echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -58,20 +58,17 @@ jobs:
 
       - name: Build APK
         working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
         run: |
-          set -e
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon assembleDebug
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
           else
-            gradle --no-daemon assembleDebug
+            gradle assembleDebug
           fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VoidXenMobile-debug-apk
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          name: VoidXenMobile-APK
+          path: extracted/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
